@@ -30,3 +30,11 @@ The app is ad-hoc signed, so after a rebuild macOS may ask again: remove the old
 | ⌃⌥Z | Open snap layouts for the focused window |
 
 Each feature can be switched off from the menu bar icon, which also has **Launch at Login**.
+
+## Tests
+
+```sh
+swift test   # unit tests for the layout maths and keyboard shortcuts
+```
+
+CI runs the tests and `./build.sh` on every push.
