@@ -11,7 +11,23 @@ Windows 11–style window snapping for macOS. Lives in the menu bar.
 
 On first launch, allow WinSnap under **System Settings → Privacy & Security → Accessibility**.
 It starts working within a second of being allowed; no restart needed.
-The app is ad-hoc signed, so after a rebuild macOS may ask again: remove the old entry and re-add it.
+
+### Keeping the permission across rebuilds
+
+macOS ties the Accessibility permission to the app's signing identity, so `build.sh` signs with a
+stable certificate when it finds one, in this order:
+
+1. `$WINSNAP_SIGN_IDENTITY` (a certificate name or SHA-1 hash from `security find-identity -v -p codesigning`)
+2. A **Developer ID Application** or **Apple Development** certificate in your keychain
+3. **WinSnap Local Signing**, a self-signed certificate you create once with:
+
+   ```sh
+   ./make-cert.sh   # asks for your password to trust the certificate
+   ```
+
+With none of these it falls back to an ad-hoc signature and prints a warning; macOS then asks again
+after every rebuild. When you first switch to a certificate, remove the old WinSnap entry under
+Accessibility and allow it once more; after that, rebuilds keep the permission.
 
 ## Features
 
