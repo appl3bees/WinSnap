@@ -1,0 +1,4 @@
+build/
+WinSnap.app/
+.build/
+.DS_Store
