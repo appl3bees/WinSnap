@@ -43,39 +43,60 @@ final class HotKeyManager {
 enum KeyboardSnap {
     enum Direction { case left, right, up, down }
 
+    enum Action: Equatable {
+        case snap(SnapPosition)
+        /// Snap to `position` on the adjacent display, if there is one.
+        case snapOnNeighbor(toLeft: Bool, position: SnapPosition)
+        case restore
+        case minimize
+        case none
+    }
+
     static func handle(_ dir: Direction) {
         guard let w = AX.focusedWindow(), !w.isOwn, let f = w.frame,
               let screen = NSScreen.best(for: Coords.flip(f)) else { return }
         let current = WindowStore.shared.record(for: w, currentFrame: f)?.position
 
+        switch action(for: dir, from: current) {
+        case .snap(let position): Snapper.snap(w, to: position, screen: screen)
+        case .snapOnNeighbor(let toLeft, let position):
+            if let next = neighbor(of: screen, toLeft: toLeft) { Snapper.snap(w, to: position, screen: next) }
+        case .restore: Snapper.restore(w)
+        case .minimize: w.minimize()
+        case .none: break
+        }
+    }
+
+    /// What a key press does, given where the window is currently snapped (nil if it isn't).
+    static func action(for dir: Direction, from current: SnapPosition?) -> Action {
         switch (dir, current) {
         case (.left, .rightHalf?), (.right, .leftHalf?), (.down, .maximized?):
-            Snapper.restore(w)
-        case (.left, .topRight?): Snapper.snap(w, to: .topLeft, screen: screen)
-        case (.left, .bottomRight?): Snapper.snap(w, to: .bottomLeft, screen: screen)
-        case (.right, .topLeft?): Snapper.snap(w, to: .topRight, screen: screen)
-        case (.right, .bottomLeft?): Snapper.snap(w, to: .bottomRight, screen: screen)
+            return .restore
+        case (.left, .topRight?): return .snap(.topLeft)
+        case (.left, .bottomRight?): return .snap(.bottomLeft)
+        case (.right, .topLeft?): return .snap(.topRight)
+        case (.right, .bottomLeft?): return .snap(.bottomRight)
         case (.left, .leftHalf?):
             // Already on the left: hop to the right half of the display on the left, if any.
-            if let next = neighbor(of: screen, toLeft: true) { Snapper.snap(w, to: .rightHalf, screen: next) }
+            return .snapOnNeighbor(toLeft: true, position: .rightHalf)
         case (.right, .rightHalf?):
-            if let next = neighbor(of: screen, toLeft: false) { Snapper.snap(w, to: .leftHalf, screen: next) }
-        case (.left, _): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.right, _): Snapper.snap(w, to: .rightHalf, screen: screen)
+            return .snapOnNeighbor(toLeft: false, position: .leftHalf)
+        case (.left, _): return .snap(.leftHalf)
+        case (.right, _): return .snap(.rightHalf)
 
-        case (.up, .leftHalf?): Snapper.snap(w, to: .topLeft, screen: screen)
-        case (.up, .rightHalf?): Snapper.snap(w, to: .topRight, screen: screen)
-        case (.up, .bottomLeft?): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.up, .bottomRight?): Snapper.snap(w, to: .rightHalf, screen: screen)
-        case (.up, nil): Snapper.snap(w, to: .maximized, screen: screen)
-        case (.up, _): break
+        case (.up, .leftHalf?): return .snap(.topLeft)
+        case (.up, .rightHalf?): return .snap(.topRight)
+        case (.up, .bottomLeft?): return .snap(.leftHalf)
+        case (.up, .bottomRight?): return .snap(.rightHalf)
+        case (.up, nil): return .snap(.maximized)
+        case (.up, _): return .none
 
-        case (.down, .leftHalf?): Snapper.snap(w, to: .bottomLeft, screen: screen)
-        case (.down, .rightHalf?): Snapper.snap(w, to: .bottomRight, screen: screen)
-        case (.down, .topLeft?): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.down, .topRight?): Snapper.snap(w, to: .rightHalf, screen: screen)
-        case (.down, nil): w.minimize()
-        case (.down, _): break
+        case (.down, .leftHalf?): return .snap(.bottomLeft)
+        case (.down, .rightHalf?): return .snap(.bottomRight)
+        case (.down, .topLeft?): return .snap(.leftHalf)
+        case (.down, .topRight?): return .snap(.rightHalf)
+        case (.down, nil): return .minimize
+        case (.down, _): return .none
         }
     }
 

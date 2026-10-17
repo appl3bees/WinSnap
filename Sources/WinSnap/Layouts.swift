@@ -22,7 +22,11 @@ enum Layouts {
 
     /// Target frame for a unit zone, in Cocoa coordinates.
     static func frame(for unit: CGRect, on screen: NSScreen) -> CGRect {
-        let vf = screen.visibleFrame
+        frame(for: unit, in: screen.visibleFrame)
+    }
+
+    /// Target frame for a unit zone within a visible frame, in Cocoa coordinates.
+    static func frame(for unit: CGRect, in vf: CGRect) -> CGRect {
         let x = (vf.minX + unit.minX * vf.width).rounded()
         let maxX = (vf.minX + unit.maxX * vf.width).rounded()
         let top = (vf.maxY - unit.minY * vf.height).rounded()
