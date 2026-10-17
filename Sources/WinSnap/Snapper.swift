@@ -42,7 +42,9 @@ enum Snapper {
         let target = Coords.flip(Layouts.frame(for: unit, on: screen))
         w.setFrame(target)
         let applied = w.frame ?? target
-        WindowStore.shared.set(.init(original: original, snapped: applied, position: position), for: w)
+        // Layout and Snap Assist snaps pass only a zone; record the matching position so shortcuts keep working.
+        let recorded = position ?? SnapPosition(unit: unit)
+        WindowStore.shared.set(.init(original: original, snapped: applied, position: recorded), for: w)
     }
 
     static func snap(_ w: WindowRef, to position: SnapPosition, screen: NSScreen) {
