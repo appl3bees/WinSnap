@@ -10,8 +10,31 @@ Windows 11–style window snapping for macOS. Lives in the menu bar.
 ```
 
 On first launch, allow WinSnap under **System Settings → Privacy & Security → Accessibility**.
-It starts working within a second of being allowed; no restart needed.
-The app is ad-hoc signed, so after a rebuild macOS may ask again: remove the old entry and re-add it.
+It starts working within a second of being allowed; no restart needed. If access is later revoked,
+the menu bar icon turns into a warning and WinSnap resumes by itself once it's allowed again.
+
+### Keeping Accessibility access across rebuilds
+
+macOS ties the permission to the app's code signature. An ad-hoc signature changes with every build,
+so each rebuild silently loses access. Create a local signing certificate once:
+
+```sh
+scripts/create-signing-cert.sh
+./build.sh --install
+```
+
+`build.sh` signs with it from then on (set `WINSNAP_SIGN_IDENTITY` to use another identity).
+After switching from ad-hoc, remove the old WinSnap entry from the Accessibility list
+(or run `tccutil reset Accessibility com.winsnap.app`) and allow it one last time.
+
+## Tests
+
+```sh
+swift test            # with Xcode
+./build.sh --test     # also works with only the Command Line Tools
+```
+
+CI runs both the tests and the app build on every push and pull request.
 
 ## Features
 

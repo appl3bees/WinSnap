@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Builds WinSnap.app next to this script. Usage: ./build.sh [--install]
+# Builds WinSnap.app next to this script. Usage: ./build.sh [--install | --test]
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,6 +15,24 @@ if [[ -f "$STALE" && -f "${STALE:h}/bridging.modulemap" ]]; then
   "name": "$STALE", "external-contents": "$PWD/build/empty.modulemap" } ] }
 EOF
     FLAGS=(-vfsoverlay build/overlay.yaml -Xcc -ivfsoverlay -Xcc build/overlay.yaml)
+fi
+
+if [[ "${1:-}" == "--test" ]]; then
+    # Same as `swift test`, for Command Line Tools installs whose SwiftPM can't load Package.swift:
+    # compile the app and tests as one module and run them with Swift Testing's own entry point.
+    FW=()
+    for dir in /Library/Developer/CommandLineTools/Library/Developer/Frameworks \
+               "$(xcrun --show-sdk-platform-path 2>/dev/null)/Developer/Library/Frameworks"; do
+        [[ -d "$dir/Testing.framework" ]] && FW+=(-F "$dir" -Xlinker -rpath -Xlinker "$dir")
+    done
+    SOURCES=(Sources/WinSnap/*.swift)
+    SOURCES=(${SOURCES:#*/main.swift})
+    print 'import Testing
+@main struct TestRunner { static func main() async { await Testing.__swiftPMEntryPoint() as Never } }' > build/TestRunner.swift
+    swiftc -module-name WinSnap -parse-as-library -D WINSNAP_SINGLE_MODULE_TESTS \
+        -target "$(uname -m)-apple-macosx13.0" "${FLAGS[@]}" "${FW[@]}" \
+        "${SOURCES[@]}" Tests/WinSnapTests/*.swift build/TestRunner.swift -o build/WinSnapTests
+    exec build/WinSnapTests
 fi
 
 swiftc -O -target "$(uname -m)-apple-macosx13.0" "${FLAGS[@]}" Sources/WinSnap/*.swift -o build/WinSnap
@@ -44,8 +62,16 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc signature so macOS can track the Accessibility permission.
-codesign --force --deep --sign - "$APP"
+# macOS ties the Accessibility permission to the signature's designated requirement. An ad-hoc one is
+# the binary's hash, so every rebuild loses access; a certificate keeps the same requirement.
+IDENTITY="${WINSNAP_SIGN_IDENTITY:-WinSnap Self-Signed}"
+if security find-identity -p codesigning 2>/dev/null | grep -qF "\"$IDENTITY\""; then
+    codesign --force --deep --sign "$IDENTITY" "$APP"
+else
+    codesign --force --deep --sign - "$APP"
+    echo "warning: signed ad-hoc, so macOS will drop Accessibility access after each rebuild." >&2
+    echo "         Run scripts/create-signing-cert.sh once to keep it." >&2
+fi
 echo "Built $(pwd)/$APP"
 
 if [[ "${1:-}" == "--install" ]]; then

@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let drag = DragSnapController()
     private let green = GreenButtonController()
     private var trustTimer: Timer?
+    private var trustWatch: Timer?
     private var running = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -49,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func requestAccess() {
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(opts)
+        waitForAccess()
+    }
+
+    private func waitForAccess() {
+        updateIcon()
         trustTimer?.invalidate()
         trustTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] t in
             guard AXIsProcessTrusted() else { return }
@@ -62,6 +68,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         drag.start()
         green.start()
         applyHotkeys()
+        updateIcon()
+        // Access can be revoked while we run (switched off, or reset after the signature changed).
+        // Without it every AX call fails silently, so stand down and wait for it to come back.
+        trustWatch?.invalidate()
+        trustWatch = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            guard !AXIsProcessTrusted() else { return }
+            NSLog("WinSnap: Accessibility access was revoked; pausing until it is granted again")
+            self?.stopAll()
+            self?.waitForAccess()
+        }
+    }
+
+    private func stopAll() {
+        running = false
+        trustWatch?.invalidate()
+        trustWatch = nil
+        drag.stop()
+        green.stop()
+        HotKeyManager.shared.unregisterAll()
+    }
+
+    private func updateIcon() {
+        let trusted = AXIsProcessTrusted()
+        let image = NSImage(systemSymbolName: trusted ? "rectangle.split.2x2" : "exclamationmark.triangle",
+                            accessibilityDescription: "WinSnap")
+        image?.isTemplate = true
+        statusItem.button?.image = image
+        statusItem.button?.toolTip = trusted ? "WinSnap" : "WinSnap needs Accessibility access"
     }
 
     private func applyHotkeys() {
@@ -89,9 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        let image = NSImage(systemSymbolName: "rectangle.split.2x2", accessibilityDescription: "WinSnap")
-        image?.isTemplate = true
-        statusItem.button?.image = image
+        updateIcon()
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu

@@ -43,39 +43,57 @@ final class HotKeyManager {
 enum KeyboardSnap {
     enum Direction { case left, right, up, down }
 
+    enum Action: Equatable {
+        case snap(SnapPosition)
+        /// Snap to this position on the neighbouring display, if there is one.
+        case moveToNeighbor(SnapPosition, toLeft: Bool)
+        case restore, minimize, none
+    }
+
     static func handle(_ dir: Direction) {
         guard let w = AX.focusedWindow(), !w.isOwn, let f = w.frame,
               let screen = NSScreen.best(for: Coords.flip(f)) else { return }
-        let current = WindowStore.shared.record(for: w, currentFrame: f)?.position
+        let rec = WindowStore.shared.record(for: w, currentFrame: f)
 
-        switch (dir, current) {
-        case (.left, .rightHalf?), (.right, .leftHalf?), (.down, .maximized?):
-            Snapper.restore(w)
-        case (.left, .topRight?): Snapper.snap(w, to: .topLeft, screen: screen)
-        case (.left, .bottomRight?): Snapper.snap(w, to: .bottomLeft, screen: screen)
-        case (.right, .topLeft?): Snapper.snap(w, to: .topRight, screen: screen)
-        case (.right, .bottomLeft?): Snapper.snap(w, to: .bottomRight, screen: screen)
-        case (.left, .leftHalf?):
-            // Already on the left: hop to the right half of the display on the left, if any.
-            if let next = neighbor(of: screen, toLeft: true) { Snapper.snap(w, to: .rightHalf, screen: next) }
-        case (.right, .rightHalf?):
-            if let next = neighbor(of: screen, toLeft: false) { Snapper.snap(w, to: .leftHalf, screen: next) }
-        case (.left, _): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.right, _): Snapper.snap(w, to: .rightHalf, screen: screen)
+        switch action(for: dir, snapped: rec != nil, position: rec?.position) {
+        case .snap(let p): Snapper.snap(w, to: p, screen: screen)
+        case .moveToNeighbor(let p, let toLeft):
+            if let next = neighbor(of: screen, toLeft: toLeft) { Snapper.snap(w, to: p, screen: next) }
+        case .restore: Snapper.restore(w)
+        case .minimize: w.minimize()
+        case .none: break
+        }
+    }
 
-        case (.up, .leftHalf?): Snapper.snap(w, to: .topLeft, screen: screen)
-        case (.up, .rightHalf?): Snapper.snap(w, to: .topRight, screen: screen)
-        case (.up, .bottomLeft?): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.up, .bottomRight?): Snapper.snap(w, to: .rightHalf, screen: screen)
-        case (.up, nil): Snapper.snap(w, to: .maximized, screen: screen)
-        case (.up, _): break
+    /// What a shortcut does to a window. `snapped` is whether WinSnap placed it; `position` is nil for
+    /// unsnapped windows and for layout zones that aren't a half, quarter or maximized (e.g. thirds).
+    static func action(for dir: Direction, snapped: Bool, position: SnapPosition?) -> Action {
+        switch (dir, position) {
+        case (.left, .rightHalf?), (.right, .leftHalf?), (.down, .maximized?): return .restore
+        case (.left, .topRight?): return .snap(.topLeft)
+        case (.left, .bottomRight?): return .snap(.bottomLeft)
+        case (.right, .topLeft?): return .snap(.topRight)
+        case (.right, .bottomLeft?): return .snap(.bottomRight)
+        // Already on the left: hop to the right half of the display on the left, if any.
+        case (.left, .leftHalf?): return .moveToNeighbor(.rightHalf, toLeft: true)
+        case (.right, .rightHalf?): return .moveToNeighbor(.leftHalf, toLeft: false)
+        case (.left, _): return .snap(.leftHalf)
+        case (.right, _): return .snap(.rightHalf)
 
-        case (.down, .leftHalf?): Snapper.snap(w, to: .bottomLeft, screen: screen)
-        case (.down, .rightHalf?): Snapper.snap(w, to: .bottomRight, screen: screen)
-        case (.down, .topLeft?): Snapper.snap(w, to: .leftHalf, screen: screen)
-        case (.down, .topRight?): Snapper.snap(w, to: .rightHalf, screen: screen)
-        case (.down, nil): w.minimize()
-        case (.down, _): break
+        case (.up, .leftHalf?): return .snap(.topLeft)
+        case (.up, .rightHalf?): return .snap(.topRight)
+        case (.up, .bottomLeft?): return .snap(.leftHalf)
+        case (.up, .bottomRight?): return .snap(.rightHalf)
+        case (.up, nil): return .snap(.maximized)
+        case (.up, _): return .none
+
+        case (.down, .leftHalf?): return .snap(.bottomLeft)
+        case (.down, .rightHalf?): return .snap(.bottomRight)
+        case (.down, .topLeft?): return .snap(.leftHalf)
+        case (.down, .topRight?): return .snap(.rightHalf)
+        // A window in some other layout zone goes back to its own size, like Windows; only a free one minimizes.
+        case (.down, nil): return snapped ? .restore : .minimize
+        case (.down, _): return .none
         }
     }
 

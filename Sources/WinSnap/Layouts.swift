@@ -22,7 +22,11 @@ enum Layouts {
 
     /// Target frame for a unit zone, in Cocoa coordinates.
     static func frame(for unit: CGRect, on screen: NSScreen) -> CGRect {
-        let vf = screen.visibleFrame
+        frame(for: unit, in: screen.visibleFrame)
+    }
+
+    /// Target frame for a unit zone inside a visible frame, both in Cocoa coordinates.
+    static func frame(for unit: CGRect, in vf: CGRect) -> CGRect {
         let x = (vf.minX + unit.minX * vf.width).rounded()
         let maxX = (vf.minX + unit.maxX * vf.width).rounded()
         let top = (vf.maxY - unit.minY * vf.height).rounded()
@@ -32,7 +36,7 @@ enum Layouts {
 }
 
 /// Snap positions reachable from screen edges and keyboard shortcuts.
-enum SnapPosition {
+enum SnapPosition: CaseIterable {
     case leftHalf, rightHalf, topLeft, topRight, bottomLeft, bottomRight, maximized
 
     var unit: CGRect {
@@ -45,6 +49,17 @@ enum SnapPosition {
         case .bottomRight: return CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5)
         case .maximized: return CGRect(x: 0, y: 0, width: 1, height: 1)
         }
+    }
+
+    /// The position a layout zone occupies, if it is one of these, so a window snapped from the
+    /// flyout to e.g. the left half behaves exactly like one snapped with ⌃⌥←.
+    init?(unit: CGRect) {
+        func close(_ a: CGRect, _ b: CGRect) -> Bool {
+            abs(a.minX - b.minX) < 0.001 && abs(a.minY - b.minY) < 0.001
+                && abs(a.width - b.width) < 0.001 && abs(a.height - b.height) < 0.001
+        }
+        guard let p = Self.allCases.first(where: { close($0.unit, unit) }) else { return nil }
+        self = p
     }
 
     /// The layout and zone Snap Assist should continue from.

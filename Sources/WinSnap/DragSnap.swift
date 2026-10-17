@@ -112,11 +112,18 @@ final class DragSnapController {
     }
 
     private func edgePosition(_ loc: CGPoint, screen: NSScreen) -> SnapPosition? {
-        let f = screen.frame
+        Self.edgePosition(loc, screen: screen.frame,
+                          others: NSScreen.screens.filter { $0 != screen }.map(\.frame),
+                          edgeThreshold: edgeThreshold, cornerSize: cornerSize)
+    }
+
+    /// The snap position for a cursor at `loc` on a display with frame `f`, all in Cocoa coordinates.
+    static func edgePosition(_ loc: CGPoint, screen f: CGRect, others: [CGRect],
+                             edgeThreshold: CGFloat, cornerSize: CGFloat) -> SnapPosition? {
         // A shared edge with another display isn't a snap edge; the cursor just crosses over.
         func open(_ dx: CGFloat, _ dy: CGFloat) -> Bool {
             let p = CGPoint(x: loc.x + dx, y: loc.y + dy)
-            return !NSScreen.screens.contains { $0 != screen && NSMouseInRect(p, $0.frame, false) }
+            return !others.contains { NSMouseInRect(p, $0, false) }
         }
         let atLeft = loc.x <= f.minX + edgeThreshold && open(-10, 0)
         let atRight = loc.x >= f.maxX - 1 - edgeThreshold && open(10, 0)

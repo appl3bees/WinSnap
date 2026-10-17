@@ -42,7 +42,7 @@ enum Snapper {
         let target = Coords.flip(Layouts.frame(for: unit, on: screen))
         w.setFrame(target)
         let applied = w.frame ?? target
-        WindowStore.shared.set(.init(original: original, snapped: applied, position: position), for: w)
+        WindowStore.shared.set(.init(original: original, snapped: applied, position: position ?? SnapPosition(unit: unit)), for: w)
     }
 
     static func snap(_ w: WindowRef, to position: SnapPosition, screen: NSScreen) {
