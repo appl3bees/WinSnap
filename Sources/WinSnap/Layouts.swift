@@ -32,8 +32,19 @@ enum Layouts {
 }
 
 /// Snap positions reachable from screen edges and keyboard shortcuts.
-enum SnapPosition {
+enum SnapPosition: CaseIterable {
     case leftHalf, rightHalf, topLeft, topRight, bottomLeft, bottomRight, maximized
+
+    /// The position whose zone matches a layout zone, so layout snaps behave like edge snaps.
+    init?(unit: CGRect) {
+        let match = Self.allCases.first {
+            let u = $0.unit
+            return abs(u.minX - unit.minX) < 0.001 && abs(u.minY - unit.minY) < 0.001
+                && abs(u.width - unit.width) < 0.001 && abs(u.height - unit.height) < 0.001
+        }
+        guard let match else { return nil }
+        self = match
+    }
 
     var unit: CGRect {
         switch self {
