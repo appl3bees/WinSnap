@@ -44,8 +44,26 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Ad-hoc signature so macOS can track the Accessibility permission.
-codesign --force --deep --sign - "$APP"
+# macOS ties the Accessibility permission to the signing identity. An ad-hoc signature changes
+# on every build, so prefer a real certificate: $WINSNAP_SIGN_IDENTITY if set, else the first
+# Developer ID / Apple Development / WinSnap Local Signing (see make-cert.sh) identity found.
+IDENTITY="${WINSNAP_SIGN_IDENTITY:-}"
+if [[ -z "$IDENTITY" ]]; then
+    IDENTITIES=$(security find-identity -v -p codesigning 2>/dev/null || true)
+    for NAME in "Developer ID Application" "Apple Development" "WinSnap Local Signing"; do
+        # Use the SHA-1 hash so duplicate names in the keychain aren't ambiguous.
+        IDENTITY=$(awk -v n="\"$NAME" 'index($0, n) { print $2; exit }' <<< "$IDENTITIES")
+        [[ -n "$IDENTITY" ]] && break
+    done
+fi
+if [[ -n "$IDENTITY" ]]; then
+    codesign --force --deep --sign "$IDENTITY" "$APP"
+    echo "Signed with: $(codesign -dvv "$APP" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+else
+    codesign --force --deep --sign - "$APP"
+    echo "warning: no signing certificate found, ad-hoc signed. macOS will ask for Accessibility" >&2
+    echo "again after each rebuild; run ./make-cert.sh once to fix that." >&2
+fi
 echo "Built $(pwd)/$APP"
 
 if [[ "${1:-}" == "--install" ]]; then
