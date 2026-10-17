@@ -9,6 +9,7 @@ final class SnapAssist {
     private var placed: [WindowRef] = []
     private var panel: KeyablePanel?
     private var clickMonitor: Any?
+    private var resignObserver: Any?
 
     func begin(after w: WindowRef, layout: Int, zone: Int, screen: NSScreen) {
         end(raise: false)
@@ -31,6 +32,8 @@ final class SnapAssist {
         let grid = AssistGridView(windows: candidates) { [weak self] picked in
             self?.pick(picked, unit: unit)
         }
+        // Clicking empty space in the zone means "leave it empty": hand focus back to the snapped window.
+        grid.onBackgroundClick = { [weak self] in self?.end(raise: true) }
         let p = UI.panel(size: frame.size, content: grid, radius: 12, keyable: true) as! KeyablePanel
         p.level = .floating
         p.onCancel = { [weak self] in self?.end(raise: true) }
@@ -47,6 +50,14 @@ final class SnapAssist {
 
         if clickMonitor == nil {
             clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.end(raise: false)
+            }
+        }
+        // Switching apps any other way (⌘Tab, Spotlight, the Dock) also means the user moved on.
+        if resignObserver == nil {
+            resignObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
                 self?.end(raise: false)
             }
         }
@@ -71,6 +82,10 @@ final class SnapAssist {
             NSEvent.removeMonitor(m)
             clickMonitor = nil
         }
+        if let o = resignObserver {
+            NotificationCenter.default.removeObserver(o)
+            resignObserver = nil
+        }
         if raise {
             for w in placed.reversed() { w.raise() }
         }
@@ -85,6 +100,11 @@ final class AssistGridView: NSView {
     private let scroll = NSScrollView()
     private let doc = FlippedView()
     private var tiles: [WindowTile] = []
+
+    var onBackgroundClick: (() -> Void)? {
+        get { doc.onClick }
+        set { doc.onClick = newValue }
+    }
 
     static let tileSize = NSSize(width: 180, height: 120)
     static let gap: CGFloat = 14
@@ -124,8 +144,12 @@ final class AssistGridView: NSView {
     }
 }
 
+/// The grid's document view; it fills the zone, so a click that misses every tile lands here.
 final class FlippedView: NSView {
+    var onClick: (() -> Void)?
     override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) { onClick?() }
 }
 
 final class WindowTile: NSView {

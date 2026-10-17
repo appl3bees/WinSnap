@@ -34,6 +34,9 @@ CNF
 /usr/bin/openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -name "$NAME" \
     -out "$TMP/id.p12" -passout pass:winsnap
 security import "$TMP/id.p12" -k "$KEYCHAIN" -P winsnap -T /usr/bin/codesign
+# Without this, codesign fails with errSecInternalComponent. It asks for your Mac login password once.
+echo "Enter your Mac login password to let codesign use the new key:"
+security set-key-partition-list -S apple-tool:,apple:,codesign: -s -l "$NAME" "$KEYCHAIN" >/dev/null
 
 echo "Created \"$NAME\". Rebuild with ./build.sh --install."
 echo "macOS lists it as untrusted; that's fine for signing your own builds."
