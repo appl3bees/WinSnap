@@ -66,7 +66,7 @@ git push origin v1.0.0
 | Drag to the **top edge** (away from the flyout) | Maximize |
 | Drag to the **left / right edge** | Left / right half |
 | Drag to a **corner** | Quarter |
-| **Hover the green button** | Snap layout flyout; click a zone |
+| **Hover the green button** | Snap layout flyout opens beside the macOS menu; hover a zone to preview it, click to snap |
 | Drag a snapped window away | Restores its previous size |
 | After snapping | **Snap Assist** offers your other windows for the empty zones (Esc or click away to skip) |
 | ⌃⌥← / ⌃⌥→ | Snap left / right (again: move to the next display) |
