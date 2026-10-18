@@ -1,0 +1,29 @@
+name: Release
+
+# Push a tag like v1.0.0 to build WinSnap.app and attach it to a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: swift test
+      - name: Build universal app bundle
+        run: WINSNAP_UNIVERSAL=1 WINSNAP_VERSION="${GITHUB_REF_NAME#v}" ./build.sh
+      - name: Check bundle
+        run: |
+          codesign --verify --strict --verbose=2 WinSnap.app
+          lipo -verify_arch arm64 x86_64 WinSnap.app/Contents/MacOS/WinSnap
+      - name: Zip
+        run: ditto -c -k --keepParent WinSnap.app "WinSnap-$GITHUB_REF_NAME.zip"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "WinSnap-$GITHUB_REF_NAME.zip" --title "WinSnap $GITHUB_REF_NAME" --generate-notes

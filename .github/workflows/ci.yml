@@ -13,6 +13,6 @@ jobs:
       - name: Unit tests
         run: swift test
       - name: Build app bundle
-        run: ./build.sh
+        run: WINSNAP_UNIVERSAL=1 ./build.sh
       - name: Check signature
         run: codesign --verify --strict --verbose=2 WinSnap.app

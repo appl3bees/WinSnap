@@ -1,6 +1,18 @@
 # WinSnap
 
-Windows 11–style window snapping for macOS. Lives in the menu bar.
+Windows 11–style window snapping for macOS. Lives in the menu bar. It never connects to the internet.
+
+## Install
+
+1. Download `WinSnap-vX.Y.Z.zip` from the [latest release](https://github.com/appl3bees/WinSnap/releases/latest) and unzip it.
+2. Move **WinSnap.app** to your Applications folder and open it.
+3. macOS will say it can't verify the app, because WinSnap isn't notarized by Apple. Click **Done**, then go to
+   **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to WinSnap, and confirm.
+4. Allow WinSnap under **System Settings → Privacy & Security → Accessibility** when it asks.
+   This is what lets it move other apps' windows.
+
+Requires macOS 13 or later, on Apple silicon or Intel. When you install a newer version, macOS may ask you to
+allow Accessibility again: remove the old WinSnap entry from that list and allow the new one.
 
 ## Build & run
 
@@ -35,6 +47,16 @@ swift test            # with Xcode
 ```
 
 CI runs both the tests and the app build on every push and pull request.
+
+## Releasing
+
+Push a version tag and GitHub Actions builds a universal (Apple silicon + Intel) app, zips it and
+publishes it as a GitHub Release:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ## Features
 
