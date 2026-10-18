@@ -80,11 +80,17 @@ final class LayoutFlyoutView: NSView {
     }
 
     var highlighted: (layout: Int, zone: Int)? {
-        didSet { if highlighted?.layout != oldValue?.layout || highlighted?.zone != oldValue?.zone { needsDisplay = true } }
+        didSet {
+            guard highlighted?.layout != oldValue?.layout || highlighted?.zone != oldValue?.zone else { return }
+            needsDisplay = true
+            onHover?(highlighted)
+        }
     }
 
     /// Set to handle clicks; leave nil when hover is driven externally (during a drag).
     var onSelect: ((Int, Int) -> Void)?
+    /// Called when the zone under the mouse changes, nil when it leaves every zone.
+    var onHover: (((layout: Int, zone: Int)?) -> Void)?
 
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -192,25 +198,78 @@ final class PreviewOverlay {
         window.contentView = fx
     }
 
+    /// A critically damped spring per frame component: retargeting mid-flight keeps the current velocity,
+    /// so sliding between zones glides instead of restarting an animation on every mouse event.
+    private var current = CGRect.zero
+    private var velocity = CGRect.zero
+    private var target = CGRect.zero
+    private var ticker: Timer?
+    private var lastTick = Date()
+    private var visible = false
+    private let stiffness: CGFloat = 32   // higher settles faster; ~0.15s here
+
     func show(_ frame: CGRect, from point: CGPoint) {
-        let target = frame.insetBy(dx: 6, dy: 6)
-        if !window.isVisible {
-            window.setFrame(CGRect(x: point.x - 20, y: point.y - 20, width: 40, height: 40), display: false)
-            window.alphaValue = 0
-            window.orderFrontRegardless()
-        } else if window.frame == target {
-            return
+        target = frame.insetBy(dx: 6, dy: 6)
+        if !visible {
+            visible = true
+            if !window.isVisible {
+                current = CGRect(x: point.x - 20, y: point.y - 20, width: 40, height: 40)
+                velocity = .zero
+                window.setFrame(current, display: false)
+                window.alphaValue = 0
+                window.orderFrontRegardless()
+            }
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.1
+                window.animator().alphaValue = 1
+            }
         }
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.15
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window.animator().setFrame(target, display: true)
-            window.animator().alphaValue = 1
-        }
+        startTicking()
     }
 
     func hide() {
-        guard window.isVisible else { return }
-        window.orderOut(nil)
+        guard visible else { return }
+        visible = false
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.1
+            window.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, !self.visible else { return }
+            self.ticker?.invalidate()
+            self.ticker = nil
+            self.window.orderOut(nil)
+        })
+    }
+
+    private func startTicking() {
+        guard ticker == nil else { return }
+        lastTick = Date()
+        let t = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(t, forMode: .common)   // keep running while the mouse button is held
+        ticker = t
+    }
+
+    private func tick() {
+        let now = Date()
+        let dt = CGFloat(min(now.timeIntervalSince(lastTick), 1.0 / 30))
+        lastTick = now
+        func step(_ x: inout CGFloat, _ v: inout CGFloat, _ goal: CGFloat) {
+            v += (stiffness * stiffness * (goal - x) - 2 * stiffness * v) * dt
+            x += v * dt
+        }
+        step(&current.origin.x, &velocity.origin.x, target.origin.x)
+        step(&current.origin.y, &velocity.origin.y, target.origin.y)
+        step(&current.size.width, &velocity.size.width, target.size.width)
+        step(&current.size.height, &velocity.size.height, target.size.height)
+
+        let settled = abs(current.minX - target.minX) + abs(current.minY - target.minY)
+            + abs(current.width - target.width) + abs(current.height - target.height) < 1
+        if settled {
+            current = target
+            velocity = .zero
+            ticker?.invalidate()
+            ticker = nil
+        }
+        window.setFrame(current.integral, display: true)
     }
 }

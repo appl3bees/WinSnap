@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let window = Coords.flip(f)
         let anchor = w.zoomButton.flatMap(AX.cocoaFrame(of:))
             ?? CGRect(x: window.minX + 60, y: window.maxY - 26, width: 14, height: 14)
-        green.showFlyout(for: w, anchor: anchor, sticky: true)
+        green.showFlyout(for: w, anchor: anchor, besideSystemMenu: false)
     }
 
     // MARK: Menu
